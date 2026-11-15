@@ -1,0 +1,5 @@
+build_tmp/
+appimagetool
+*.AppImage
+__pycache__/
+*.pyc
