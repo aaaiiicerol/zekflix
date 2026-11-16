@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ZekFlix - biblioteca local de filmes e séries estilo Netflix (Linux)."""
-import os, sys, re, json, hashlib, shutil, subprocess, urllib.request, urllib.parse, urllib.error
+import sys, re, json, hashlib, shutil, subprocess, urllib.request, urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -10,19 +10,9 @@ from PyQt6.QtGui import (QPixmap, QPainter, QPainterPath, QColor, QFont, QIcon,
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QPushButton, QDialog, QFileDialog,
-                             QMessageBox, QToolButton, QMenu, QListView,
-                             QInputDialog)
+                             QMessageBox, QToolButton, QMenu, QListView)
 
-OMDB_API_KEY = ""        # cada usuário informa a sua (fica em ~/.config/zekflix/config.json)
-
-
-def set_api_key(k):
-    global OMDB_API_KEY
-    OMDB_API_KEY = (k or "").strip()
-
-
-class OmdbError(Exception):
-    """Problema com a chave ou com o limite diário do OMDb."""
+OMDB_API_KEY = "c3fe24b2"
 
 CONFIG_DIR = Path.home() / ".config" / "zekflix"
 CACHE_DIR = Path.home() / ".cache" / "zekflix"
@@ -100,27 +90,10 @@ def scan_library(root: Path):
 
 # ----------------------------------------------------------------------- OMDb
 def omdb_request(**params):
-    if not OMDB_API_KEY:
-        raise OmdbError("Nenhuma chave do OMDb configurada.")
     params["apikey"] = OMDB_API_KEY
     url = "https://www.omdbapi.com/?" + urllib.parse.urlencode(params)
-    try:
-        with urllib.request.urlopen(url, timeout=15) as r:
-            data = json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            raise OmdbError("Chave do OMDb inválida ou ainda não ativada "
-                            "(confirme o e-mail que o OMDb enviou).")
-        raise
-    err = str(data.get("Error", ""))
-    if data.get("Response") == "False":
-        if "limit" in err.lower():
-            raise OmdbError("O limite diário de consultas do OMDb foi atingido. "
-                            "Tente novamente amanhã.")
-        if "api key" in err.lower():
-            raise OmdbError("Chave do OMDb inválida ou ainda não ativada "
-                            "(confirme o e-mail que o OMDb enviou).")
-    return data
+    with urllib.request.urlopen(url, timeout=15) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 
 def translate_pt(text):
@@ -178,7 +151,6 @@ def fetch_metadata(m: Media):
 
 class MetaWorker(QThread):
     done = pyqtSignal(str, dict)
-    error = pyqtSignal(str)
 
     def __init__(self, jobs, cache):
         super().__init__()
@@ -193,9 +165,6 @@ class MetaWorker(QThread):
                 old = self.cache.get(m.key)
                 data = add_translation(dict(old)) if old else fetch_metadata(m)
                 self.done.emit(m.key, data)
-            except OmdbError as e:
-                self.error.emit(str(e))
-                return
             except Exception:
                 continue            # erro de rede: não grava no cache, tenta depois
 
@@ -209,19 +178,8 @@ def play(files, start=0):
         cmd = ["vlc", "--fullscreen"] + files
     else:
         cmd = ["xdg-open", files[0]]
-    env = os.environ.copy()
-    if getattr(sys, "frozen", False):      # rodando empacotado (AppImage/PyInstaller)
-        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
-        if orig is not None:
-            env["LD_LIBRARY_PATH"] = orig
-        else:
-            env.pop("LD_LIBRARY_PATH", None)
-        for var in ("QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH", "PYTHONHOME",
-                    "PYTHONPATH"):
-            env.pop(var, None)
     try:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         env=env)
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         QMessageBox.warning(None, "ZekFlix", f"Não consegui abrir o player:\n{e}\n\n"
                             "Instale o mpv:  sudo apt install mpv")
@@ -382,7 +340,6 @@ class ZekFlix(QMainWindow):
         self.setWindowTitle("ZekFlix")
         self.resize(1280, 800)
         self.cfg = load_json(CONFIG_FILE, {})
-        set_api_key(self.cfg.get("omdb_key", ""))
         self.meta = load_json(META_FILE, {})
         self.items, self.worker, self.filter = [], None, "all"
 
@@ -416,7 +373,6 @@ class ZekFlix(QMainWindow):
         menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(self)
         menu.addAction("Trocar pasta da biblioteca…", self.choose_folder)
-        menu.addAction("Configurar chave do OMDb…", self.change_key)
         menu.addAction("Procurar novos conteúdos", self.rescan)
         menu.addAction("Limpar cache e baixar tudo de novo", self.clear_cache)
         menu_btn.setMenu(menu)
@@ -439,34 +395,6 @@ class ZekFlix(QMainWindow):
         self.status = QLabel("")
         self.status.setObjectName("status")
         v.addWidget(self.status)
-
-    # --- chave do OMDb
-    def ensure_key(self):
-        if not OMDB_API_KEY:
-            self.ask_key()
-
-    def ask_key(self):
-        text, ok = QInputDialog.getText(
-            self, "Chave do OMDb",
-            "Para baixar capas e descrições, o ZekFlix usa uma chave GRATUITA do OMDb.\n\n"
-            "1) Abra https://www.omdbapi.com/apikey.aspx\n"
-            "2) Escolha FREE, informe seu e-mail e confirme o e-mail que eles enviam\n"
-            "3) Cole a chave aqui:", text=OMDB_API_KEY)
-        if ok and text.strip():
-            self.cfg["omdb_key"] = text.strip()
-            save_json(CONFIG_FILE, self.cfg)
-            set_api_key(text)
-            return True
-        return False
-
-    def change_key(self):
-        if self.ask_key() and self.cfg.get("library"):
-            self.rescan()
-
-    def on_error(self, msg):
-        self.status.setText(msg)
-        QMessageBox.warning(self, "ZekFlix — OMDb",
-                            msg + "\n\nUse ⚙ > Configurar chave do OMDb para corrigir.")
 
     # --- pasta
     def ensure_folder(self):
@@ -499,15 +427,10 @@ class ZekFlix(QMainWindow):
         if self.worker and self.worker.isRunning():
             self.worker.requestInterruption()
             self.worker.wait()
-        if pending and not OMDB_API_KEY:
-            self.status.setText("Sem chave do OMDb: abra ⚙ > Configurar chave "
-                                "para baixar capas e descrições.")
-            return
         if pending:
             self.status.setText(f"Buscando informações de {len(pending)} título(s) no OMDb…")
             self.worker = MetaWorker(pending, dict(self.meta))
             self.worker.done.connect(self.on_meta)
-            self.worker.error.connect(self.on_error)
             self.worker.finished.connect(self.on_finished)
             self.worker.start()
         else:
@@ -581,7 +504,6 @@ def main():
     app.setStyleSheet(STYLE)
     w = ZekFlix()
     w.show()
-    w.ensure_key()
     if not w.ensure_folder():
         sys.exit(0)
     if w.items == []:
