@@ -25,8 +25,23 @@ def set_api_key(k):
 class OmdbError(Exception):
     """Problema com a chave ou com o limite diário do OMDb."""
 
-CONFIG_DIR = Path.home() / ".config" / "zekflix"
-CACHE_DIR = Path.home() / ".cache" / "zekflix"
+
+
+def app_dir():
+    """Pasta onde está o programa (ou o .py)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent
+
+
+if (app_dir() / "portable.txt").exists():          # modo portátil: tudo na pasta do programa
+    CONFIG_DIR = CACHE_DIR = app_dir() / "data"
+elif os.name == "nt":                               # Windows instalado
+    CONFIG_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "ZekFlix"
+    CACHE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ZekFlix"
+else:                                               # Linux
+    CONFIG_DIR = Path.home() / ".config" / "zekflix"
+    CACHE_DIR = Path.home() / ".cache" / "zekflix"
 POSTER_DIR = CACHE_DIR / "posters"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 META_FILE = CACHE_DIR / "metadata.json"
@@ -202,13 +217,23 @@ class MetaWorker(QThread):
 
 
 # --------------------------------------------------------------------- player
+def find_mpv():
+    """Procura o mpv embutido (Windows) e depois o do sistema."""
+    local = app_dir() / "mpv" / ("mpv.exe" if os.name == "nt" else "mpv")
+    return str(local) if local.exists() else shutil.which("mpv")
+
+
 def play(files, start=0):
     files = files[start:]
-    if shutil.which("mpv"):
-        cmd = ["mpv", "--fs", "--save-position-on-quit", "--force-window=yes"] + files
+    mpv = find_mpv()
+    if mpv:
+        cmd = [mpv, "--fs", "--save-position-on-quit", "--force-window=yes"] + files
     elif shutil.which("vlc"):
         cmd = ["vlc", "--fullscreen"] + files
     else:
+        if os.name == "nt":
+            os.startfile(files[0])
+            return
         cmd = ["xdg-open", files[0]]
     env = os.environ.copy()
     if getattr(sys, "frozen", False):      # rodando empacotado (AppImage/PyInstaller)
@@ -222,10 +247,10 @@ def play(files, start=0):
             env.pop(var, None)
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         env=env)
+                         env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except Exception as e:
         QMessageBox.warning(None, "ZekFlix", f"Não consegui abrir o player:\n{e}\n\n"
-                            "Instale o mpv:  sudo apt install mpv")
+                            "Instale o mpv: https://mpv.io/installation")
 
 
 # ------------------------------------------------------------------ visuais

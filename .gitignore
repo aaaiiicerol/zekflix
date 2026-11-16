@@ -3,3 +3,13 @@ appimagetool
 *.AppImage
 __pycache__/
 *.pyc
+build/
+dist/
+release/
+*.spec
+*.exe
+zekflix.ico
+zekflix.png
+mpv_tmp/
+mpv.7z
+data/

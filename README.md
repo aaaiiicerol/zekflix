@@ -17,7 +17,7 @@ O ZekFlix lê a sua pasta de vídeos, busca capa, nota e descrição (em portugu
 - Busca por título
 - Toca quase qualquer formato (mp4, mkv, avi, mov, webm, ts...) usando o **mpv**
 
-## 📥 Instalação (AppImage)
+## 📥 Instalação no Linux (AppImage)
 
 1. Baixe o AppImage em **[Releases](../../releases/latest)**
 2. Dê permissão de execução: botão direito → Propriedades → *Executar como programa*
@@ -28,6 +28,19 @@ O ZekFlix lê a sua pasta de vídeos, busca capa, nota e descrição (em portugu
 4. Abra o `ZekFlix-x86_64.AppImage`
 
 > No Linux Mint / Ubuntu, se o AppImage não abrir: `sudo apt install libfuse2`
+
+## 🪟 Instalação no Windows
+
+Baixe em **[Releases](../../releases/latest)**:
+
+| Arquivo | Para quem |
+|---|---|
+| `ZekFlix-Setup-x.y.z.exe` | **Instalador**: cria atalho no menu Iniciar (e na área de trabalho, se quiser) e desinstala pelo Painel de Controle |
+| `ZekFlix-Portatil-x.y.z.zip` | **Portátil**: extraia em qualquer pasta ou pendrive e abra `ZekFlix.exe`. Configurações e cache ficam na pasta `data`, ao lado do programa |
+
+O player **mpv já vem incluído**, não precisa instalar nada.
+
+> Como o programa não tem assinatura digital, o Windows pode mostrar o aviso "O Windows protegeu seu computador". Clique em **Mais informações → Executar assim mesmo**.
 
 ## 🔑 Chave do OMDb (gratuita)
 
@@ -76,8 +89,9 @@ Ou crie uma tag (`git tag v1.0.1 && git push origin v1.0.1`) e o GitHub compila 
 
 ## 🗑️ Dados do programa
 
-- Configurações: `~/.config/zekflix/`
-- Cache e capas: `~/.cache/zekflix/`
+- Linux: configurações em `~/.config/zekflix/` e cache/capas em `~/.cache/zekflix/`
+- Windows (instalado): `%APPDATA%\ZekFlix` e `%LOCALAPPDATA%\ZekFlix`
+- Windows (portátil): pasta `data` ao lado do `ZekFlix.exe`
 
 ## 📄 Licença
 
