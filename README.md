@@ -38,7 +38,7 @@ Baixe em **[Releases](../../releases/latest)**:
 | `ZekFlix-Setup-x.y.z.exe` | **Instalador**: cria atalho no menu Iniciar (e na área de trabalho, se quiser) e desinstala pelo Painel de Controle |
 | `ZekFlix-Portatil-x.y.z.zip` | **Portátil**: extraia em qualquer pasta ou pendrive e abra `ZekFlix.exe`. Configurações e cache ficam na pasta `data`, ao lado do programa |
 
-O player **mpv já vem incluído**, não precisa instalar nada.
+O player **mpv já vem incluído**, não precisa instalar nada. Se o vídeo não abrir e aparecer um erro citando `vulkan-1.dll`, atualize o driver de vídeo (ou instale o [Vulkan Runtime](https://vulkan.lunarg.com/sdk/home#windows)).
 
 > Como o programa não tem assinatura digital, o Windows pode mostrar o aviso "O Windows protegeu seu computador". Clique em **Mais informações → Executar assim mesmo**.
 

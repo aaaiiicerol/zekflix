@@ -21,13 +21,13 @@ jobs:
           python-version: '3.11'
 
       - name: Dependências
-        run: pip install PyQt6 pyinstaller pillow
+        run: pip install PyQt6 pyinstaller pillow certifi
 
       - name: Gerar o ícone
         run: python windows/make_icon.py
 
       - name: Empacotar com PyInstaller
-        run: pyinstaller --noconfirm --windowed --name ZekFlix --icon zekflix.ico zekflix.py
+        run: pyinstaller --noconfirm --windowed --name ZekFlix --icon zekflix.ico --add-data "zekflix.png;." zekflix.py
 
       - name: Baixar e incluir o mpv
         shell: bash
@@ -38,6 +38,23 @@ jobs:
           mkdir -p dist/ZekFlix/mpv
           cp -r mpv_tmp/* dist/ZekFlix/mpv/
           test -f dist/ZekFlix/mpv/mpv.exe
+
+      - name: Incluir o Vulkan (o mpv precisa do vulkan-1.dll)
+        shell: bash
+        run: |
+          if curl -L --fail -o vk.zip "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-runtime-components.zip"; then
+            7z x vk.zip -ovk_tmp -y > /dev/null
+            dll=$(find vk_tmp -ipath "*x64*" -iname "vulkan-1.dll" | head -1)
+            if [ -n "$dll" ]; then
+              cp "$dll" dist/ZekFlix/mpv/
+              echo "vulkan-1.dll incluido: $dll"
+            else
+              echo "AVISO: vulkan-1.dll nao encontrado dentro do zip"
+            fi
+          else
+            echo "AVISO: nao consegui baixar o runtime do Vulkan"
+          fi
+          ./dist/ZekFlix/mpv/mpv.exe --version | head -3 || echo "AVISO: o mpv nao iniciou"
 
       - name: Versão
         id: ver

@@ -12,7 +12,7 @@ python3 -m venv build_tmp/venv
 # shellcheck disable=SC1091
 . build_tmp/venv/bin/activate
 pip install --quiet --upgrade pip
-pip install --quiet PyQt6 pyinstaller
+pip install --quiet PyQt6 pyinstaller certifi
 
 echo "==> 2/5 Gerando o ícone"
 QT_QPA_PLATFORM=offscreen python - <<'EOF'
@@ -44,6 +44,7 @@ EOF
 echo "==> 3/5 Empacotando com PyInstaller (pode demorar alguns minutos)"
 pyinstaller --noconfirm --windowed --name zekflix \
     --distpath build_tmp/dist --workpath build_tmp/work --specpath build_tmp \
+    --add-data "$PWD/build_tmp/zekflix.png:." \
     zekflix.py
 
 echo "==> 4/5 Montando o AppDir"

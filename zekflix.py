@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """ZekFlix - biblioteca local de filmes e séries estilo Netflix (Linux)."""
-import os, sys, random, re, json, hashlib, shutil, subprocess, urllib.request, urllib.parse, urllib.error
+import os, sys, ssl, random, re, json, hashlib, shutil, subprocess, urllib.request, urllib.parse, urllib.error
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from PyQt6.QtCore import (Qt, QRectF, QThread, QTimer, QVariantAnimation,
                           QPropertyAnimation, pyqtSignal)
 from PyQt6.QtGui import (QPixmap, QPainter, QPainterPath, QColor, QFont,
-                         QLinearGradient, QPen)
+                         QLinearGradient, QPen, QIcon)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QListWidget,
                              QPushButton, QDialog, QFileDialog, QMessageBox,
@@ -115,13 +115,24 @@ def scan_library(root: Path):
 
 
 # ----------------------------------------------------------------------- OMDb
+def https_open(target, timeout=15):
+    """urlopen com certificados do certifi (o Windows de uma máquina nova pode não ter
+    todos os certificados raiz instalados)."""
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        ctx = ssl.create_default_context()
+    return urllib.request.urlopen(target, timeout=timeout, context=ctx)
+
+
 def omdb_request(**params):
     if not OMDB_API_KEY:
         raise OmdbError("Nenhuma chave do OMDb configurada.")
     params["apikey"] = OMDB_API_KEY
     url = "https://www.omdbapi.com/?" + urllib.parse.urlencode(params)
     try:
-        with urllib.request.urlopen(url, timeout=15) as r:
+        with https_open(url) as r:
             data = json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 401:
@@ -157,7 +168,7 @@ def translate_pt(text):
                                        "dt": "t", "q": chunk}).encode()
         req = urllib.request.Request(
             "https://translate.googleapis.com/translate_a/single", data=body)
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with https_open(req) as r:
             res = json.loads(r.read().decode("utf-8"))
         out.append("".join(seg[0] for seg in res[0] if seg[0]))
     return " ".join(out)
@@ -185,7 +196,8 @@ def fetch_metadata(m: Media):
     if poster and poster != "N/A":
         dest = POSTER_DIR / (hashlib.md5(m.key.encode()).hexdigest() + ".jpg")
         try:
-            urllib.request.urlretrieve(poster, dest)
+            with https_open(poster) as r, open(dest, "wb") as f:
+                f.write(r.read())
             data["poster_file"] = str(dest)
         except Exception:
             pass
@@ -202,6 +214,7 @@ class MetaWorker(QThread):
         self.cache = cache
 
     def run(self):
+        fails, last = 0, ""
         for m in self.jobs:
             if self.isInterruptionRequested():
                 return
@@ -212,8 +225,14 @@ class MetaWorker(QThread):
             except OmdbError as e:
                 self.error.emit(str(e))
                 return
-            except Exception:
+            except Exception as e:
+                fails += 1
+                last = f"{type(e).__name__}: {e}"
                 continue            # erro de rede: não grava no cache, tenta depois
+        if fails:
+            self.error.emit(f"Não consegui baixar as informações de {fails} título(s).\n\n"
+                            f"Motivo: {last}\n\nVerifique a internet e tente de novo em "
+                            "⚙ > Procurar novos conteúdos.")
 
 
 # --------------------------------------------------------------------- player
@@ -473,6 +492,7 @@ class Row(QWidget):
             h.addWidget(c)
         h.addStretch(1)
         self.sc.setWidget(inner)
+        inner.setAutoFillBackground(False)
         v.addWidget(self.sc)
 
     def slide(self, d):
@@ -693,6 +713,12 @@ QDialog QListWidget {{ background: rgba(255,255,255,18); border: none; border-ra
 QDialog QListWidget::item {{ padding: 9px 10px; border-radius: 6px; }}
 QDialog QListWidget::item:hover {{ background: rgba(255,255,255,25); }}
 QDialog QListWidget::item:selected {{ background: {RED}; color: white; }}
+QMessageBox, QInputDialog {{ background: #1c1c1c; }}
+QMessageBox QLabel, QInputDialog QLabel {{ color: #e5e5e5; font-size: 14px; }}
+QInputDialog QLineEdit {{ background: #2b2b2b; border: 1px solid #555; border-radius: 8px; padding: 7px 10px; min-width: 380px; color: white; }}
+QMessageBox QPushButton, QDialogButtonBox QPushButton {{ background: #2b2b2b; color: white; border: 1px solid #555; border-radius: 6px; padding: 7px 20px; min-width: 76px; }}
+QMessageBox QPushButton:hover, QDialogButtonBox QPushButton:hover {{ border-color: white; }}
+QMessageBox QPushButton:default, QDialogButtonBox QPushButton:default {{ background: {RED}; border-color: {RED}; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; }}
 QScrollBar::handle:vertical {{ background: #3d3d3d; border-radius: 5px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
@@ -788,7 +814,8 @@ class ZekFlix(QMainWindow):
     def on_error(self, msg):
         self.status.setText(msg)
         QMessageBox.warning(self, "ZekFlix — OMDb",
-                            msg + "\n\nUse ⚙ > Configurar chave do OMDb para corrigir.")
+                            msg + ("\n\nUse ⚙ > Configurar chave do OMDb para corrigir."
+                                   if "chave" in msg.lower() else ""))
 
     # --- pasta
     def ensure_folder(self):
@@ -982,6 +1009,15 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("ZekFlix")
     app.setStyleSheet(STYLE)
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ezekielso.ZekFlix")
+        except Exception:
+            pass
+    icon = Path(getattr(sys, "_MEIPASS", app_dir())) / "zekflix.png"
+    if icon.exists():
+        app.setWindowIcon(QIcon(str(icon)))
     w = ZekFlix()
     w.show()
     w.ensure_key()
