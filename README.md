@@ -1,11 +1,11 @@
 # 🎬 ZekFlix
 
-Seus filmes e séries locais em uma interface **estilo Netflix** para Linux.
+Seus filmes e séries locais em uma interface **estilo Netflix** para Windows e Linux.
 
 O ZekFlix lê a sua pasta de vídeos, busca capa, nota e descrição (em português) e mostra tudo em uma grade bonita e escura. Basta clicar e assistir.
 
 ![Tela do ZekFlix](docs/print.png)
-
+![Segunda tela do ZekFlix](docs/print2.png)
 ## ✨ Funcionalidades
 
 - Interface moderna e escura, com capas arredondadas e nota ★ do IMDb
