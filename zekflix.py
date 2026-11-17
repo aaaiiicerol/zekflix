@@ -877,6 +877,17 @@ QDialog QListWidget {{ background: rgba(255,255,255,18); border: none; border-ra
 QDialog QListWidget::item {{ padding: 9px 10px; border-radius: 6px; }}
 QDialog QListWidget::item:hover {{ background: rgba(255,255,255,25); }}
 QDialog QListWidget::item:selected {{ background: {RED}; color: white; }}
+QMenu {{ background: #1f1f1f; border: 1px solid #3a3a3a; padding: 6px 0; }}
+QMenu::item {{ padding: 8px 30px; color: #e5e5e5; background: transparent; }}
+QMenu::item:selected {{ background: {RED}; color: white; }}
+QMenu::separator {{ height: 1px; background: #3a3a3a; margin: 4px 8px; }}
+QComboBox {{ background: #2b2b2b; border: 1px solid #555; border-radius: 8px; padding: 7px 12px; color: white; min-width: 300px; }}
+QComboBox:hover, QComboBox:focus {{ border-color: white; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 30px; border: none; }}
+QComboBox::down-arrow {{ image: none; width: 0; height: 0; margin-right: 12px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #b3b3b3; }}
+QComboBox QAbstractItemView {{ background: #1f1f1f; color: #e5e5e5; border: 1px solid #3a3a3a; selection-background-color: {RED}; selection-color: white; outline: none; padding: 4px; }}
+QComboBox QAbstractItemView::item {{ min-height: 28px; padding: 4px 10px; }}
+QToolTip {{ background: #1f1f1f; color: #e5e5e5; border: 1px solid #3a3a3a; padding: 4px; }}
 QMessageBox, QInputDialog {{ background: #1c1c1c; }}
 QMessageBox QLabel, QInputDialog QLabel {{ color: #e5e5e5; font-size: 14px; }}
 QInputDialog QLineEdit {{ background: #2b2b2b; border: 1px solid #555; border-radius: 8px; padding: 7px 10px; min-width: 380px; color: white; }}
