@@ -4,7 +4,7 @@ import os, sys, ssl, random, re, json, hashlib, shutil, subprocess, urllib.reque
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PyQt6.QtCore import (Qt, QRectF, QThread, QTimer, QVariantAnimation,
+from PyQt6.QtCore import (Qt, QRectF, QThread, QTimer, QVariantAnimation, QLocale,
                           QPropertyAnimation, pyqtSignal)
 from PyQt6.QtGui import (QPixmap, QPainter, QPainterPath, QColor, QFont,
                          QLinearGradient, QPen, QIcon)
@@ -115,6 +115,136 @@ def scan_library(root: Path):
 
 
 # ----------------------------------------------------------------------- OMDb
+LANGS = {"en": "English (original)", "pt": "Português", "es": "Español", "fr": "Français",
+         "de": "Deutsch", "it": "Italiano", "ru": "Русский", "ja": "日本語", "ko": "한국어",
+         "zh-CN": "中文 (简体)", "hi": "हिन्दी", "tr": "Türkçe", "nl": "Nederlands",
+         "pl": "Polski", "id": "Bahasa Indonesia"}
+HAND = ("en", "pt", "es")          # idiomas com textos escritos à mão; os outros são traduzidos
+LANG = "en"
+UI_AUTO = {}
+_qt_tr = None
+
+# chave: (inglês, português, espanhol)
+S = {
+ "nav_home": ("Home", "Início", "Inicio"),
+ "nav_movies": ("Movies", "Filmes", "Películas"),
+ "nav_series": ("Series", "Séries", "Series"),
+ "search": ("🔍  Search titles…", "🔍  Buscar títulos…", "🔍  Buscar títulos…"),
+ "m_folder": ("Change library folder…", "Trocar pasta da biblioteca…", "Cambiar carpeta de la biblioteca…"),
+ "m_key": ("Set OMDb key…", "Configurar chave do OMDb…", "Configurar clave de OMDb…"),
+ "m_lang": ("Language…", "Idioma…", "Idioma…"),
+ "m_rescan": ("Look for new content", "Procurar novos conteúdos", "Buscar contenido nuevo"),
+ "m_clear": ("Clear cache and download everything again", "Limpar cache e baixar tudo de novo", "Borrar caché y descargar todo de nuevo"),
+ "st_lib": ("{n} title(s) in the library  •  {path}", "{n} título(s) na biblioteca  •  {path}", "{n} título(s) en la biblioteca  •  {path}"),
+ "st_fetch": ("Fetching information for {n} title(s) from OMDb…", "Buscando informações de {n} título(s) no OMDb…", "Buscando información de {n} título(s) en OMDb…"),
+ "st_nokey": ("No OMDb key: open ⚙ > Set OMDb key to download covers and descriptions.", "Sem chave do OMDb: abra ⚙ > Configurar chave para baixar capas e descrições.", "Sin clave de OMDb: abre ⚙ > Configurar clave para descargar portadas y descripciones."),
+ "tag_series": ("● SERIES", "● SÉRIE", "● SERIE"),
+ "tag_movie": ("● MOVIE", "● FILME", "● PELÍCULA"),
+ "watch": ("▶  Watch", "▶  Assistir", "▶  Ver"),
+ "more": ("ⓘ  More info", "ⓘ  Mais informações", "ⓘ  Más información"),
+ "watch_ep": ("▶  Watch episode", "▶  Assistir episódio", "▶  Ver episodio"),
+ "director": ("Director:", "Direção:", "Dirección:"),
+ "cast": ("Cast:", "Elenco:", "Reparto:"),
+ "no_plot": ("No description available.", "Sem descrição disponível.", "Sin descripción disponible."),
+ "row_top": ("Top rated", "Mais bem avaliados", "Mejor valoradas"),
+ "results": ("Results for “{q}”", "Resultados para “{q}”", "Resultados para “{q}”"),
+ "empty_none": ("No titles found.", "Nenhum título encontrado.", "No se encontraron títulos."),
+ "empty_lib": ("Your library is empty.", "Sua biblioteca está vazia.", "Tu biblioteca está vacía."),
+ "kind_series": ("Series", "Série", "Serie"),
+ "kind_movie": ("Movie", "Filme", "Película"),
+ "key_title": ("OMDb key", "Chave do OMDb", "Clave de OMDb"),
+ "key_text": ("To download covers and descriptions, ZekFlix uses a FREE OMDb key. Get yours at https://www.omdbapi.com/apikey.aspx (choose FREE and confirm the email they send), then paste it below:",
+              "Para baixar capas e descrições, o ZekFlix usa uma chave GRATUITA do OMDb. Pegue a sua em https://www.omdbapi.com/apikey.aspx (escolha FREE e confirme o e-mail que eles enviam) e cole abaixo:",
+              "Para descargar portadas y descripciones, ZekFlix usa una clave GRATUITA de OMDb. Consigue la tuya en https://www.omdbapi.com/apikey.aspx (elige FREE y confirma el correo que te envían) y pégala abajo:"),
+ "err_key": ("Invalid OMDb key, or not activated yet (confirm the email OMDb sent you).", "Chave do OMDb inválida ou ainda não ativada (confirme o e-mail que o OMDb enviou).", "Clave de OMDb inválida o aún no activada (confirma el correo que te envió OMDb)."),
+ "err_limit": ("The daily OMDb request limit was reached. Try again tomorrow.", "O limite diário de consultas do OMDb foi atingido. Tente novamente amanhã.", "Se alcanzó el límite diario de consultas de OMDb. Inténtalo de nuevo mañana."),
+ "err_nokey": ("No OMDb key configured.", "Nenhuma chave do OMDb configurada.", "No hay ninguna clave de OMDb configurada."),
+ "err_fetch1": ("Could not download information for {fails} title(s).", "Não consegui baixar as informações de {fails} título(s).", "No pude descargar la información de {fails} título(s)."),
+ "reason": ("Reason:", "Motivo:", "Motivo:"),
+ "err_fetch2": ("Check your internet connection and try again from ⚙ > Look for new content.", "Verifique a internet e tente de novo em ⚙ > Procurar novos conteúdos.", "Revisa tu conexión a internet e inténtalo de nuevo en ⚙ > Buscar contenido nuevo."),
+ "hint_key": ("Use ⚙ > Set OMDb key to fix this.", "Use ⚙ > Configurar chave do OMDb para corrigir.", "Usa ⚙ > Configurar clave de OMDb para corregirlo."),
+ "welcome_title": ("Welcome to ZekFlix", "Bem-vindo ao ZekFlix", "Bienvenido a ZekFlix"),
+ "welcome_text": ("Choose the folder that contains the subfolders of your movies and series.", "Escolha a pasta que contém as subpastas dos seus filmes e séries.", "Elige la carpeta que contiene las subcarpetas de tus películas y series."),
+ "folder_title": ("ZekFlix library folder", "Pasta da biblioteca ZekFlix", "Carpeta de la biblioteca de ZekFlix"),
+ "clear_q": ("Delete the cache and download everything again?", "Apagar o cache e baixar tudo de novo?", "¿Borrar la caché y descargar todo de nuevo?"),
+ "player_err": ("Could not open the player:", "Não consegui abrir o player:", "No pude abrir el reproductor:"),
+ "player_hint": ("Install mpv: https://mpv.io/installation", "Instale o mpv: https://mpv.io/installation", "Instala mpv: https://mpv.io/installation"),
+}
+PLACEHOLDERS = {"{n}": "7001", "{path}": "7002", "{q}": "7003", "{fails}": "7004", "{last}": "7005",
+      "https://www.omdbapi.com/apikey.aspx": "7006", "https://mpv.io/installation": "7007"}
+
+
+def tx(key, **kw):
+    row = S[key]
+    txt = row[HAND.index(LANG)] if LANG in HAND else (UI_AUTO.get(key) or row[0])
+    return txt.format(**kw) if kw else txt
+
+
+def auto_translate_ui(code):
+    keys = list(S)
+    src = [protect(S[k][0]) for k in keys]
+    out = translate_lines(src, code)
+    return {k: restore(v.strip()) for k, v in zip(keys, out)}
+
+
+def protect(txt):
+    for k, v in PLACEHOLDERS.items():
+        txt = txt.replace(k, v)
+    return txt
+
+
+def restore(txt):
+    for k, v in PLACEHOLDERS.items():
+        txt = txt.replace(v, k)
+    return txt
+
+
+def set_language(code):
+    """Define o idioma; para idiomas sem texto escrito à mão traduz o menu uma vez e guarda."""
+    global LANG, UI_AUTO
+    LANG = code if code in LANGS else "en"
+    UI_AUTO = {}
+    if LANG in HAND:
+        return
+    f = CONFIG_DIR / f"ui_{LANG}.json"
+    data = load_json(f, None)
+    if not data or set(data) != set(S):
+        try:
+            data = auto_translate_ui(LANG)
+            save_json(f, data)
+        except Exception:
+            data = {}                  # sem internet: usa o inglês por enquanto
+    UI_AUTO = data
+
+
+def install_qt_translator(app, code):
+    """Botões padrão do Qt (OK, Cancelar, Sim, Não) no idioma escolhido."""
+    global _qt_tr
+    try:
+        from PyQt6.QtCore import QTranslator, QLibraryInfo
+        if _qt_tr:
+            app.removeTranslator(_qt_tr)
+            _qt_tr = None
+        path = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+        for name in (code.replace("-", "_"), code.split("-")[0]):
+            tr = QTranslator()
+            if tr.load(f"qtbase_{name}", path):
+                app.installTranslator(tr)
+                _qt_tr = tr
+                break
+    except Exception:
+        pass
+
+
+def ask_language(parent, current):
+    names, codes = list(LANGS.values()), list(LANGS)
+    item, ok = QInputDialog.getItem(
+        parent, "Language / Idioma",
+        "Choose your language / Escolha o idioma / Elige el idioma:",
+        names, codes.index(current) if current in codes else 0, False)
+    return codes[names.index(item)] if ok else None
+
+
 def https_open(target, timeout=15):
     """urlopen com certificados do certifi (o Windows de uma máquina nova pode não ter
     todos os certificados raiz instalados)."""
@@ -128,7 +258,7 @@ def https_open(target, timeout=15):
 
 def omdb_request(**params):
     if not OMDB_API_KEY:
-        raise OmdbError("Nenhuma chave do OMDb configurada.")
+        raise OmdbError(tx("err_nokey"))
     params["apikey"] = OMDB_API_KEY
     url = "https://www.omdbapi.com/?" + urllib.parse.urlencode(params)
     try:
@@ -136,22 +266,29 @@ def omdb_request(**params):
             data = json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            raise OmdbError("Chave do OMDb inválida ou ainda não ativada "
-                            "(confirme o e-mail que o OMDb enviou).")
+            raise OmdbError(tx("err_key"))
         raise
     err = str(data.get("Error", ""))
     if data.get("Response") == "False":
         if "limit" in err.lower():
-            raise OmdbError("O limite diário de consultas do OMDb foi atingido. "
-                            "Tente novamente amanhã.")
+            raise OmdbError(tx("err_limit"))
         if "api key" in err.lower():
-            raise OmdbError("Chave do OMDb inválida ou ainda não ativada "
-                            "(confirme o e-mail que o OMDb enviou).")
+            raise OmdbError(tx("err_key"))
     return data
 
 
-def translate_pt(text):
-    """Traduz EN -> PT-BR (endpoint gratuito do Google Translate)."""
+def _gt(q, tl):
+    body = urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": tl,
+                                   "dt": "t", "q": q}).encode()
+    req = urllib.request.Request(
+        "https://translate.googleapis.com/translate_a/single", data=body)
+    with https_open(req) as r:
+        res = json.loads(r.read().decode("utf-8"))
+    return "".join(seg[0] for seg in res[0] if seg[0])
+
+
+def translate_text(text, tl):
+    """Traduz do inglês para o idioma 'tl' (endpoint gratuito do Google Translate)."""
     if not text or text == "N/A":
         return text
     parts, buf = [], ""
@@ -162,24 +299,53 @@ def translate_pt(text):
         buf = (buf + " " + sent).strip()
     if buf:
         parts.append(buf)
-    out = []
-    for chunk in parts:
-        body = urllib.parse.urlencode({"client": "gtx", "sl": "en", "tl": "pt",
-                                       "dt": "t", "q": chunk}).encode()
-        req = urllib.request.Request(
-            "https://translate.googleapis.com/translate_a/single", data=body)
-        with https_open(req) as r:
-            res = json.loads(r.read().decode("utf-8"))
-        out.append("".join(seg[0] for seg in res[0] if seg[0]))
-    return " ".join(out)
+    return " ".join(_gt(c, tl) for c in parts)
+
+
+def translate_lines(lines, tl):
+    out, batch, size = [], [], 0
+
+    def flush():
+        if not batch:
+            return
+        parts = _gt("\n".join(batch), tl).split("\n")
+        if len(parts) != len(batch):
+            parts = [_gt(x, tl) for x in batch]
+        out.extend(parts)
+        batch.clear()
+
+    for ln in lines:
+        if batch and size + len(ln) > 1500:
+            flush()
+            size = 0
+        batch.append(ln)
+        size += len(ln) + 1
+    flush()
+    return out
+
+
+def has_tr(meta, lang):
+    return lang == "en" or lang in meta.get("tr", {}) or (lang == "pt" and "PlotPT" in meta)
+
+
+def get_tr(meta, lang):
+    """(descrição, gêneros) no idioma pedido; cai para o inglês se não houver."""
+    if lang != "en":
+        tr = meta.get("tr", {}).get(lang)
+        if tr:
+            return tr.get("Plot"), tr.get("Genre")
+        if lang == "pt" and meta.get("PlotPT"):
+            return meta["PlotPT"], meta.get("GenrePT") or meta.get("Genre")
+    return meta.get("Plot"), meta.get("Genre")
 
 
 def add_translation(data):
-    if data.get("notfound") or "PlotPT" in data:
+    if data.get("notfound") or has_tr(data, LANG):
         return data
     try:
-        data["PlotPT"] = translate_pt(data.get("Plot", ""))
-        data["GenrePT"] = translate_pt(data.get("Genre", ""))
+        new = {"Plot": translate_text(data.get("Plot", ""), LANG),
+               "Genre": translate_text(data.get("Genre", ""), LANG)}
+        data["tr"] = {**data.get("tr", {}), LANG: new}
     except Exception:
         pass                      # sem tradução agora: tenta de novo na próxima abertura
     return data
@@ -230,9 +396,8 @@ class MetaWorker(QThread):
                 last = f"{type(e).__name__}: {e}"
                 continue            # erro de rede: não grava no cache, tenta depois
         if fails:
-            self.error.emit(f"Não consegui baixar as informações de {fails} título(s).\n\n"
-                            f"Motivo: {last}\n\nVerifique a internet e tente de novo em "
-                            "⚙ > Procurar novos conteúdos.")
+            self.error.emit(f"{tx('err_fetch1', fails=fails)}\n\n{tx('reason')} {last}\n\n"
+                            f"{tx('err_fetch2')}")
 
 
 # --------------------------------------------------------------------- player
@@ -268,8 +433,7 @@ def play(files, start=0):
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except Exception as e:
-        QMessageBox.warning(None, "ZekFlix", f"Não consegui abrir o player:\n{e}\n\n"
-                            "Instale o mpv: https://mpv.io/installation")
+        QMessageBox.warning(None, "ZekFlix", f"{tx('player_err')}\n{e}\n\n{tx('player_hint')}")
 
 
 # ------------------------------------------------------------------ visuais
@@ -337,7 +501,7 @@ def draw_shadow(p, r, radius, spread):
 
 def meta_line(meta):
     bits = [meta.get("Year"), meta.get("Rated"), meta.get("Runtime"),
-            meta.get("GenrePT") or meta.get("Genre")]
+            get_tr(meta, LANG)[1]]
     line = "  •  ".join(b for b in bits if b and b != "N/A")
     r = meta.get("imdbRating")
     if r and r != "N/A":
@@ -346,8 +510,8 @@ def meta_line(meta):
 
 
 def plot_text(meta):
-    t = meta.get("PlotPT") or meta.get("Plot")
-    return t if t and t != "N/A" else "Sem descrição disponível."
+    txt = get_tr(meta, LANG)[0]
+    return txt if txt and txt != "N/A" else tx("no_plot")
 
 
 class Card(QWidget):
@@ -435,7 +599,7 @@ class Card(QWidget):
             p.setFont(f)
             p.setPen(QColor("#b9b9c2"))
             year = self.meta.get("Year") or self.media.year
-            kind = "Série" if self.media.kind == "series" else "Filme"
+            kind = tx("kind_series") if self.media.kind == "series" else tx("kind_movie")
             p.drawText(QRectF(r.left() + 10, r.bottom() - 24, r.width() - 20, 18),
                        int(Qt.AlignmentFlag.AlignVCenter), f"{kind}  ·  {year}" if year else kind)
             p.setClipping(False)
@@ -539,7 +703,7 @@ class Hero(QWidget):
         b = QVBoxLayout(box)
         b.setContentsMargins(0, 0, 0, 0)
         b.setSpacing(12)
-        tag = QLabel("● SÉRIE" if media.kind == "series" else "● FILME")
+        tag = QLabel(tx("tag_series") if media.kind == "series" else tx("tag_movie"))
         tag.setObjectName("tag")
         title = QLabel(meta.get("Title") or media.title)
         title.setObjectName("herotitle")
@@ -554,10 +718,10 @@ class Hero(QWidget):
         plot.setWordWrap(True)
         row = QHBoxLayout()
         row.setSpacing(12)
-        bp = QPushButton("▶  Assistir")
+        bp = QPushButton(tx("watch"))
         bp.setObjectName("play")
         bp.clicked.connect(lambda: self.watch.emit(self.media))
-        bi = QPushButton("ⓘ  Mais informações")
+        bi = QPushButton(tx("more"))
         bi.setObjectName("info")
         bi.clicked.connect(lambda: self.info.emit(self.media))
         row.addWidget(bp)
@@ -625,7 +789,7 @@ class DetailDialog(QDialog):
 
         right = QVBoxLayout()
         right.setSpacing(12)
-        tag = QLabel("● SÉRIE" if media.kind == "series" else "● FILME")
+        tag = QLabel(tx("tag_series") if media.kind == "series" else tx("tag_movie"))
         tag.setObjectName("tag")
         title = QLabel(meta.get("Title") or media.title)
         title.setObjectName("h1")
@@ -640,9 +804,9 @@ class DetailDialog(QDialog):
             right.addWidget(w)
         extra = []
         if meta.get("Director") not in (None, "N/A"):
-            extra.append(f"<b>Direção:</b> {meta['Director']}")
+            extra.append(f"<b>{tx('director')}</b> {meta['Director']}")
         if meta.get("Actors") not in (None, "N/A"):
-            extra.append(f"<b>Elenco:</b> {meta['Actors']}")
+            extra.append(f"<b>{tx('cast')}</b> {meta['Actors']}")
         if extra:
             e = QLabel("<br>".join(extra))
             e.setWordWrap(True)
@@ -658,7 +822,7 @@ class DetailDialog(QDialog):
             right.addWidget(self.eps, 1)
         else:
             right.addStretch(1)
-        btn = QPushButton("▶  Assistir" if media.kind == "movie" else "▶  Assistir episódio")
+        btn = QPushButton(tx("watch") if media.kind == "movie" else tx("watch_ep"))
         btn.setObjectName("play")
         btn.clicked.connect(self.start)
         right.addWidget(btn, 0, Qt.AlignmentFlag.AlignLeft)
@@ -732,6 +896,7 @@ class ZekFlix(QMainWindow):
         self.resize(1360, 860)
         self.cfg = load_json(CONFIG_FILE, {})
         set_api_key(self.cfg.get("omdb_key", ""))
+        set_language(self.cfg.get("lang", "en"))
         self.meta = load_json(META_FILE, {})
         self.items, self.worker, self.filter = [], None, "all"
         self.cards, self.dirty, self.hero_key = {}, False, None
@@ -752,8 +917,8 @@ class ZekFlix(QMainWindow):
         h.addWidget(logo)
         h.addSpacing(24)
         self.navs = {}
-        for key, label in (("all", "Início"), ("movie", "Filmes"), ("series", "Séries")):
-            b = QPushButton(label)
+        for key, label in (("all", "nav_home"), ("movie", "nav_movies"), ("series", "nav_series")):
+            b = QPushButton(tx(label))
             b.setObjectName("nav")
             b.setCheckable(True)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -763,17 +928,18 @@ class ZekFlix(QMainWindow):
         self.navs["all"].setChecked(True)
         h.addStretch(1)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("🔍  Buscar títulos…")
+        self.search.setPlaceholderText(tx("search"))
         self.search.textChanged.connect(self.refresh_view)
         h.addWidget(self.search)
         mb = QToolButton()
         mb.setText("⚙")
         mb.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(self)
-        menu.addAction("Trocar pasta da biblioteca…", self.choose_folder)
-        menu.addAction("Configurar chave do OMDb…", self.change_key)
-        menu.addAction("Procurar novos conteúdos", self.rescan)
-        menu.addAction("Limpar cache e baixar tudo de novo", self.clear_cache)
+        self.acts = {}
+        for k, fn in (("m_folder", self.choose_folder), ("m_key", self.change_key),
+                      ("m_lang", self.change_lang), ("m_rescan", self.rescan),
+                      ("m_clear", self.clear_cache)):
+            self.acts[k] = menu.addAction(tx(k), fn)
         mb.setMenu(menu)
         h.addWidget(mb)
         v.addWidget(bar)
@@ -788,6 +954,43 @@ class ZekFlix(QMainWindow):
         self.status.setObjectName("status")
         v.addWidget(self.status)
 
+    # --- idioma
+    def ensure_lang(self):
+        if "lang" in self.cfg:
+            return
+        guess = QLocale.system().name().replace("_", "-")
+        guess = guess if guess in LANGS else guess.split("-")[0]
+        code = ask_language(self, guess if guess in LANGS else "en") or "en"
+        self.apply_language(code)
+
+    def apply_language(self, code):
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            set_language(code)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.cfg["lang"] = LANG
+        save_json(CONFIG_FILE, self.cfg)
+        install_qt_translator(QApplication.instance(), LANG)
+        self.retranslate()
+
+    def change_lang(self):
+        code = ask_language(self, LANG)
+        if code and code != LANG:
+            self.apply_language(code)
+            if self.cfg.get("library"):
+                self.rescan()
+            else:
+                self.refresh_view()
+
+    def retranslate(self):
+        names = {"all": "nav_home", "movie": "nav_movies", "series": "nav_series"}
+        for k, b in self.navs.items():
+            b.setText(tx(names[k]))
+        self.search.setPlaceholderText(tx("search"))
+        for k, a in self.acts.items():
+            a.setText(tx(k))
+
     # --- chave do OMDb
     def ensure_key(self):
         if not OMDB_API_KEY:
@@ -795,11 +998,7 @@ class ZekFlix(QMainWindow):
 
     def ask_key(self):
         text, ok = QInputDialog.getText(
-            self, "Chave do OMDb",
-            "Para baixar capas e descrições, o ZekFlix usa uma chave GRATUITA do OMDb.\n\n"
-            "1) Abra https://www.omdbapi.com/apikey.aspx\n"
-            "2) Escolha FREE, informe seu e-mail e confirme o e-mail que eles enviam\n"
-            "3) Cole a chave aqui:", text=OMDB_API_KEY)
+            self, tx("key_title"), tx("key_text"), text=OMDB_API_KEY)
         if ok and text.strip():
             self.cfg["omdb_key"] = text.strip()
             save_json(CONFIG_FILE, self.cfg)
@@ -813,22 +1012,19 @@ class ZekFlix(QMainWindow):
 
     def on_error(self, msg):
         self.status.setText(msg)
-        QMessageBox.warning(self, "ZekFlix — OMDb",
-                            msg + ("\n\nUse ⚙ > Configurar chave do OMDb para corrigir."
-                                   if "chave" in msg.lower() else ""))
+        hint = "\n\n" + tx("hint_key") if msg in (tx("err_key"), tx("err_nokey")) else ""
+        QMessageBox.warning(self, "ZekFlix — OMDb", msg + hint)
 
     # --- pasta
     def ensure_folder(self):
         p = self.cfg.get("library")
         if p and Path(p).is_dir():
             return True
-        QMessageBox.information(self, "Bem-vindo ao ZekFlix",
-                                "Escolha a pasta que contém as subpastas dos seus "
-                                "filmes e séries.")
+        QMessageBox.information(self, tx("welcome_title"), tx("welcome_text"))
         return self.choose_folder()
 
     def choose_folder(self):
-        d = QFileDialog.getExistingDirectory(self, "Pasta da biblioteca ZekFlix",
+        d = QFileDialog.getExistingDirectory(self, tx("folder_title"),
                                              self.cfg.get("library", str(Path.home())))
         if not d:
             return False
@@ -843,16 +1039,15 @@ class ZekFlix(QMainWindow):
         self.refresh_view()
         pending = [m for m in self.items if m.key not in self.meta or
                    (not self.meta[m.key].get("notfound")
-                    and "PlotPT" not in self.meta[m.key])]
+                    and not has_tr(self.meta[m.key], LANG))]
         if self.worker and self.worker.isRunning():
             self.worker.requestInterruption()
             self.worker.wait()
         if pending and not OMDB_API_KEY:
-            self.status.setText("Sem chave do OMDb: abra ⚙ > Configurar chave "
-                                "para baixar capas e descrições.")
+            self.status.setText(tx("st_nokey"))
             return
         if pending:
-            self.status.setText(f"Buscando informações de {len(pending)} título(s) no OMDb…")
+            self.status.setText(tx("st_fetch", n=len(pending)))
             self.worker = MetaWorker(pending, dict(self.meta))
             self.worker.done.connect(self.on_meta)
             self.worker.error.connect(self.on_error)
@@ -862,8 +1057,7 @@ class ZekFlix(QMainWindow):
             self.on_finished()
 
     def on_finished(self):
-        self.status.setText(f"{len(self.items)} título(s) na biblioteca  •  "
-                            f"{self.cfg.get('library', '')}")
+        self.status.setText(tx("st_lib", n=len(self.items), path=self.cfg.get("library", "")))
         if self.dirty:
             self.dirty = False
             self.refresh_view()
@@ -876,7 +1070,7 @@ class ZekFlix(QMainWindow):
             c.set_meta(data)
 
     def clear_cache(self):
-        if QMessageBox.question(self, "ZekFlix", "Apagar o cache e baixar tudo de novo?") \
+        if QMessageBox.question(self, "ZekFlix", tx("clear_q")) \
                 != QMessageBox.StandardButton.Yes:
             return
         self.meta = {}
@@ -916,7 +1110,7 @@ class ZekFlix(QMainWindow):
         q = self.search.text().strip().lower()
         items = [m for m in self.items if self.filter in ("all", m.kind) and q in m.title.lower()]
         if not items:
-            msg = QLabel("Nenhum título encontrado." if self.items else "Sua biblioteca está vazia.")
+            msg = QLabel(tx("empty_none") if self.items else tx("empty_lib"))
             msg.setObjectName("empty")
             msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lay.addSpacing(80)
@@ -925,8 +1119,8 @@ class ZekFlix(QMainWindow):
         elif self.filter == "all" and not q:
             self.add_home(lay, items)
         else:
-            name = f"Resultados para “{q}”" if q else \
-                ("Filmes" if self.filter == "movie" else "Séries")
+            name = tx("results", q=q) if q else \
+                tx("nav_movies" if self.filter == "movie" else "nav_series")
             head = QLabel(name)
             head.setObjectName("head")
             lay.addWidget(head)
@@ -950,9 +1144,9 @@ class ZekFlix(QMainWindow):
         else:
             lay.addSpacing(10)
         top = [m for m in sorted(items, key=self.rating, reverse=True) if self.rating(m) > 0][:15]
-        for name, group in (("Mais bem avaliados", top),
-                            ("Filmes", [m for m in items if m.kind == "movie"]),
-                            ("Séries", [m for m in items if m.kind == "series"])):
+        for name, group in ((tx("row_top"), top),
+                            (tx("nav_movies"), [m for m in items if m.kind == "movie"]),
+                            (tx("nav_series"), [m for m in items if m.kind == "series"])):
             if group:
                 lay.addWidget(Row(name, [self.make_card(m) for m in group]))
         lay.addStretch(1)
@@ -1020,6 +1214,8 @@ def main():
         app.setWindowIcon(QIcon(str(icon)))
     w = ZekFlix()
     w.show()
+    w.ensure_lang()
+    install_qt_translator(app, LANG)
     w.ensure_key()
     if not w.ensure_folder():
         sys.exit(0)

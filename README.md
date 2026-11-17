@@ -9,7 +9,8 @@ O ZekFlix lê a sua pasta de vídeos, busca capa, nota e descrição (em portugu
 ## ✨ Funcionalidades
 
 - Interface moderna e escura, com capas arredondadas e nota ★ do IMDb
-- Capa, título, ano, gênero, elenco, nota e descrição **traduzida para português**
+- Capa, título, ano, gênero, elenco, nota e descrição no **seu idioma**
+- **15 idiomas** (você escolhe na primeira abertura e pode trocar em ⚙ → Idioma): inglês (original), português, espanhol, francês, alemão, italiano, russo, japonês, coreano, chinês, hindi, turco, holandês, polonês e indonésio
 - Filmes e séries organizados automaticamente pelas pastas
 - Episódios em ordem natural (ep2 antes do ep10); ao terminar um, toca o próximo
 - Lembra onde você parou em cada vídeo
@@ -41,6 +42,10 @@ Baixe em **[Releases](../../releases/latest)**:
 O player **mpv já vem incluído**, não precisa instalar nada. Se o vídeo não abrir e aparecer um erro citando `vulkan-1.dll`, atualize o driver de vídeo (ou instale o [Vulkan Runtime](https://vulkan.lunarg.com/sdk/home#windows)).
 
 > Como o programa não tem assinatura digital, o Windows pode mostrar o aviso "O Windows protegeu seu computador". Clique em **Mais informações → Executar assim mesmo**.
+
+## 🌎 Idiomas
+
+Na primeira abertura o ZekFlix pergunta o idioma. O OMDb fornece as descrições em **inglês (original)**; nos outros idiomas elas são traduzidas automaticamente uma única vez e guardadas no cache. Os títulos continuam no nome original. Menus e mensagens estão escritos à mão em inglês, português e espanhol; nos demais idiomas são traduzidos automaticamente na primeira escolha (precisa de internet) e também ficam guardados.
 
 ## 🔑 Chave do OMDb (gratuita)
 
